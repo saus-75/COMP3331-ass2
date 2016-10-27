@@ -40,9 +40,30 @@ class RouteUpdate extends TimerTask{
 	}
 	
 	public void run(){
-		//creates the graph
-		//run dij
-		//print paths
+		Graph G = new Graph(packets.size());
+		labelAll(G, packets);
+		connectLabels(G, packets);
+		int[] pathways = route.dijkstra(G, 0);
+		route.PrintPath(G, pathways);
+	}
+	
+	public void labelAll (Graph G, ArrayList<String> packets){
+		for (int i = 0; i < packets.size(); i++){
+			// string will be in the form of A 2000, 3, B 1.3 1000, C 2 2001, D 3 3000
+			String[] nodes = packets.get(i).split(", ");
+			// A 2000 will split [A] [2000]
+			G.NameNode(nodes[0].split(" ")[0], i);
+		}
+	}
+	
+	public void connectLabels (Graph G, ArrayList<String> packets){
+		for (int i = 0; i< packets.size(); i++){
+			String[] nodes = packets.get(i).split(", ");
+			for (int j = 2; j < nodes.length; j++){
+				G.createEdge(G.getVertex(nodes[0].split(" ")[0]), 
+						G.getVertex(nodes[j].split(" ")[0]), Float.parseFloat(nodes[j].split(" ")[1]));
+			}
+		}
 	}
 }
 

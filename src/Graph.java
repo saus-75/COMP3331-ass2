@@ -14,14 +14,14 @@ public class Graph {
 	}
 	
 	//Creates an edge between two vertex
-	public void createEdge(int x, int y, int weight){
+	public void createEdge(int x, int y, float weight){
 		adjM[x][y] = weight;
 	}
 	
 	//get the vertex through using the string
 	public int getVertex(String node){
 		int i = 0;
-		int v = 0;
+		int v = -1;
 		while (i < node.length()){
 			if (nodes[i].equals(node)){
 				v = i;
