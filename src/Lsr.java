@@ -8,32 +8,58 @@ class LSPUpdate extends TimerTask{
 	public ArrayList<byte[]> rePacks;
 	public int numOfNeighbours;
 	public int[] neighbour_ports;
-	public InetAddress IP;
+	public byte[] OgConfig;
+	public InetAddress IP = InetAddress.getLocalHost();
 	
-	public LSPUpdate(DatagramSocket mainSock, ArrayList<byte[]> rePacks, int numOfNeighbours, int[] neighbour_ports) throws Exception{
+	public LSPUpdate(DatagramSocket mainSock, ArrayList<byte[]> rePacks, int numOfNeighbours, int[] neighbour_ports, byte[] OgConfig) throws Exception{
 		this.mainSock = mainSock;
 		this.rePacks = rePacks;
 		this.numOfNeighbours = numOfNeighbours;
 		this.neighbour_ports = neighbour_ports;
-		InetAddress IP = InetAddress.getLocalHost();
+		this.OgConfig = OgConfig;
 	}
 	public void run(){
+		int k = 0;
 		for (int i = 0; i < numOfNeighbours; i++){
 			for (int j = 0; j < rePacks.size(); j++){
-				DatagramPacket mainLSP = new DatagramPacket(rePacks.get(j), rePacks.get(j).length, IP, neighbour_ports[i]);
 				try {
+					DatagramPacket mainLSP = new DatagramPacket(rePacks.get(j), rePacks.get(j).length, IP, neighbour_ports[i]);
 					mainSock.send(mainLSP);
+					if (k == 10){
+						DatagramPacket OG = new DatagramPacket(OgConfig, OgConfig.length, IP, neighbour_ports[i]);
+						mainSock.send(OG);
+					}
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
+				k++;
 			}
 		}
 	}
+	
+	// Converters //
+	public static byte[] StringAToByteA (String[] source) throws IOException{
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		ObjectOutputStream oos = new ObjectOutputStream(baos);
+		oos.writeObject(source);
+		oos.flush();
+		oos.close();
+		byte[] converted = baos.toByteArray();
+		return converted;
+	}
+	
+	public static String[] ByteAToStringA (byte[] source) throws IOException, ClassNotFoundException{
+		ByteArrayInputStream bais = new ByteArrayInputStream(source);
+		ObjectInputStream ois = new ObjectInputStream(bais);
+		String[] converted = (String[]) ois.readObject();
+		ois.close();
+		return converted;
+	}
 }
 
+//Creates the graph and does the dij alg things
 class RouteUpdate extends TimerTask{
 	public ArrayList<String> packets;
-	Dijkstra route = new Dijkstra();
 	
 	public RouteUpdate (ArrayList<String> packets){
 		this.packets = packets;
@@ -43,34 +69,40 @@ class RouteUpdate extends TimerTask{
 		Graph G = new Graph(packets.size());
 		labelAll(G, packets);
 		connectLabels(G, packets);
-		int[] pathways = route.dijkstra(G, 0);
-		route.PrintPath(G, pathways);
+		int[] pathways = Dijkstra.dijkstra(G, 0);
+		Dijkstra.PrintPath(G, pathways);
 	}
-	
-	public void labelAll (Graph G, ArrayList<String> packets){
-		for (int i = 0; i < packets.size(); i++){
-			// string will be in the form of A 2000, 3, B 1.3 1000, C 2 2001, D 3 3000
-			String[] nodes = packets.get(i).split(", ");
-			// A 2000 will split [A] [2000]
-			G.NameNode(nodes[0].split(" ")[0], i);
-		}
-	}
-	
-	public void connectLabels (Graph G, ArrayList<String> packets){
-		for (int i = 0; i< packets.size(); i++){
-			String[] nodes = packets.get(i).split(", ");
-			for (int j = 2; j < nodes.length; j++){
-				G.createEdge(G.getVertex(nodes[0].split(" ")[0]), 
-						G.getVertex(nodes[j].split(" ")[0]), Float.parseFloat(nodes[j].split(" ")[1]));
-			}
-		}
-	}
+    public void labelAll (Graph G, ArrayList<String> packets){
+    	for (int i = 0; i<G.size(); i++){
+    		String temp = packets.get(i).replaceAll("\\[", "").replaceAll("\\]", "");
+    		String first = temp.split(", ")[0].split(" ")[0];
+    		G.NameNode(first, i);
+    	}
+    }
+    
+    public void connectLabels (Graph G, ArrayList<String> packets){
+    	for (int i = 0; i < G.size(); i++){
+    		String temp = packets.get(i).replaceAll("\\[", "").replaceAll("\\]", "");
+    		String[] splits = temp.split(", ");
+    		String first = splits[0].split(" ")[0];
+    		
+    		for (int j = 2; j < splits.length; j++){
+    			String destNodes = splits[j].split(" ")[0];
+    			float weight = Float.parseFloat(splits[j].split(" ")[1]);
+    			System.out.println(first);
+    			System.out.println(destNodes);
+    			G.createEdge(G.getVertex(first), G.getVertex(destNodes),weight);
+    		}
+    	}
+    }
 }
 
 public class Lrs{
 	private static final int UPDATE_INTERVAL = 1000; //ms
 	//private static final int HEARTBEAT_INTERVAL = 500; //ms
 	private static final int ROUTE_UPDATE_INTERVAL = 30000; //ms
+	//Start the timer bois
+	static Timer time = new Timer();
 	
 	public static void main(String[] args) throws Exception{
 		if (args.length != 3){
@@ -95,10 +127,11 @@ public class Lrs{
 		//getting current neighbours
 		int numOfNeighbours = Integer.parseInt(config.get(0));
 		int[] neighbour_ports = new int[numOfNeighbours]; 
-		
+		int x =0;
 		for (int i = 1; i < config.size(); i++){
 			String[] temp = config.get(i).split(" ");
-			neighbour_ports[i] = Integer.parseInt(temp[2]);
+			neighbour_ports[x] = Integer.parseInt(temp[2]);
+			x++;
 		}
 		
 		//add its own ID and port into the packet
@@ -111,7 +144,7 @@ public class Lrs{
 		
 		//ArrayList to keep track of all received packets and to create our graph
 		ArrayList<String> Packets = new ArrayList<String>();
-		Packets.add(Arrays.toString(mainPacket).replaceAll("\\[", "").replaceAll("\\]",""));
+		Packets.add(Arrays.toString(mainPacket));
 		
 		//ArrayList to keep track of whatever packets received
 		ArrayList<byte[]> rePacks = new ArrayList<byte[]>();
@@ -129,29 +162,28 @@ public class Lrs{
 			mainSock.send(mainLSP);
 		}
 		
-		//Start the timer bois
-		Timer time1 = new Timer();
-		Timer time2 = new Timer();
-		time1.scheduleAtFixedRate(new LSPUpdate(mainSock, rePacks, numOfNeighbours, neighbour_ports), 0, UPDATE_INTERVAL);
-		time2.scheduleAtFixedRate(new RouteUpdate(Packets), 0, ROUTE_UPDATE_INTERVAL);
+		time.scheduleAtFixedRate(new LSPUpdate(mainSock, rePacks, numOfNeighbours, neighbour_ports, main), UPDATE_INTERVAL, UPDATE_INTERVAL);
+		time.scheduleAtFixedRate(new RouteUpdate(Packets), ROUTE_UPDATE_INTERVAL, ROUTE_UPDATE_INTERVAL);
 		
-		long saveTime = System.currentTimeMillis();
 		while (true){
 			int j = 0;
-			//Just a system to clear the arraylist so it doesnt get too big
-			if ((System.currentTimeMillis() - saveTime) > 2500){
-				rePacks = null;
-				saveTime = System.currentTimeMillis();
+
+			if (rePacks.size() > 10){
+				for (int i = 0; i < (rePacks.size())/2; i++){
+					rePacks.remove(i);
+				}
 			}
+			
 			//Receiving the initial packets from neighbours
 			while (j < numOfNeighbours){
 				DatagramPacket nbPack = new DatagramPacket(new byte[1024], 1024);
 				rcvdSock.receive(nbPack);
+				rcvdSock.disconnect();
 				byte[] nbPackB = nbPack.getData();
 				String[] nbPackS = ByteAToStringA(nbPackB);
 				rePacks.add(nbPackB);
 				if (Packets.contains(Arrays.toString(nbPackS)) == false){
-					Packets.add(Arrays.toString(nbPackS).replaceAll("\\[", "").replaceAll("\\]",""));
+					Packets.add(Arrays.toString(nbPackS));
 				}
 				j++;
 			}

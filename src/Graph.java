@@ -20,14 +20,10 @@ public class Graph {
 	
 	//get the vertex through using the string
 	public int getVertex(String node){
-		int i = 0;
 		int v = -1;
-		while (i < node.length()){
+		for (int i = 0; i < nodes.length; i++){
 			if (nodes[i].equals(node)){
 				v = i;
-				break;
-			} else {
-				i++;
 			}
 		}
 		return v;
